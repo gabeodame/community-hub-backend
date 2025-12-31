@@ -8,7 +8,7 @@ load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "insecure-dev-key")
-DEBUG = os.getenv("DJANGO_DEBUG", "0") == "1"
+DEBUG = os.getenv("DJANGO_DEBUG", "0") == "0"
 
 ALLOWED_HOSTS = [h.strip() for h in os.getenv("DJANGO_ALLOWED_HOSTS", "").split(",") if h.strip()]
 
@@ -29,6 +29,8 @@ INSTALLED_APPS = [
     "users",
     "core",
     "api",
+    "profiles.apps.ProfilesConfig",
+    "social",
 ]
 
 MIDDLEWARE = [
@@ -105,6 +107,9 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "anon": "60/min",
         "user": "600/min",
+        "auth_login": "10/min",
+        "auth_register": "10/min",
+        "user_write": "120/min",
     },
 }
 
