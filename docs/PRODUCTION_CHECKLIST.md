@@ -39,3 +39,4 @@
 - Run `python -m pytest`
 - Run a basic load test: `python scripts/load_test.py`
 - Use `SLEEP_MS` to pace requests and avoid tripping throttles during baseline tests
+- Validate credentials with `python scripts/verify_login.py`

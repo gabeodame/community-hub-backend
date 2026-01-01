@@ -3,6 +3,8 @@ import os
 import time
 from concurrent.futures import ThreadPoolExecutor
 from http.cookiejar import CookieJar
+from urllib.error import HTTPError
+from urllib.parse import urlencode
 from urllib.request import HTTPCookieProcessor, Request, build_opener
 
 
@@ -27,7 +29,24 @@ def _request_json(opener, method, url, body=None, headers=None):
         req.add_header(key, value)
     if body is not None:
         req.add_header("Content-Type", "application/json")
-    return opener.open(req)
+    try:
+        return opener.open(req)
+    except HTTPError as exc:
+        payload = exc.read().decode("utf-8", errors="ignore")
+        raise RuntimeError(f"HTTP {exc.code} for {url}: {payload}") from exc
+
+
+def _request_form(opener, url, body, headers=None):
+    data = urlencode(body).encode("utf-8")
+    req = Request(url, data=data, method="POST")
+    for key, value in (headers or {}).items():
+        req.add_header(key, value)
+    req.add_header("Content-Type", "application/x-www-form-urlencoded")
+    try:
+        return opener.open(req)
+    except HTTPError as exc:
+        payload = exc.read().decode("utf-8", errors="ignore")
+        raise RuntimeError(f"HTTP {exc.code} for {url}: {payload}") from exc
 
 
 def _login(opener, base_url, username, password, csrf_cookie_name):
@@ -35,9 +54,8 @@ def _login(opener, base_url, username, password, csrf_cookie_name):
     csrf_token = _cookie_value(opener.cookiejar, csrf_cookie_name)
     if not csrf_token:
         raise RuntimeError("CSRF cookie not set. Check CSRF settings.")
-    _request_json(
+    _request_form(
         opener,
-        "POST",
         f"{base_url}/api/v1/auth/token/",
         {"username": username, "password": password},
         headers={"X-CSRFToken": csrf_token},

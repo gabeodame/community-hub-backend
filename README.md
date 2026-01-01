@@ -265,3 +265,9 @@ Authenticated load test:
 ```bash
 BASE_URL=http://127.0.0.1:8000 USERNAME=user PASSWORD=password python scripts/load_test.py
 ```
+
+Verify login credentials:
+
+```bash
+BASE_URL=http://127.0.0.1:8000 USERNAME=user PASSWORD=password python scripts/verify_login.py
+```
