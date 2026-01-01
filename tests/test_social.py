@@ -1,6 +1,8 @@
 import pytest
 from django.contrib.auth import get_user_model
 
+from tests.utils import access_token_for_user
+
 from profiles.models import Profile
 from social.models import Block, Follow
 
@@ -8,12 +10,8 @@ User = get_user_model()
 
 
 def _login(api_client, username, password):
-    response = api_client.post(
-        "/api/v1/auth/token/",
-        {"username": username, "password": password},
-        format="json",
-    )
-    return response.json()["access"]
+    user = User.objects.get(username=username)
+    return access_token_for_user(user)
 
 
 @pytest.mark.django_db

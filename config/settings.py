@@ -2,15 +2,25 @@ from pathlib import Path
 import os
 from datetime import timedelta
 from dotenv import load_dotenv
-
-load_dotenv()
+from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / ".env")
 
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "insecure-dev-key")
-DEBUG = os.getenv("DJANGO_DEBUG", "0") == "0"
 
-ALLOWED_HOSTS = [h.strip() for h in os.getenv("DJANGO_ALLOWED_HOSTS", "").split(",") if h.strip()]
+def get_env(name, default=None, required=False):
+    value = os.getenv(name, default)
+    if required and not value:
+        raise ImproperlyConfigured(f"Missing required environment variable: {name}")
+    return value
+
+
+SECRET_KEY = get_env("DJANGO_SECRET_KEY", required=True)
+DEBUG = get_env("DJANGO_DEBUG", "0") == "1"
+
+ALLOWED_HOSTS = [h.strip() for h in get_env("DJANGO_ALLOWED_HOSTS", "").split(",") if h.strip()]
+if not DEBUG and not ALLOWED_HOSTS:
+    raise ImproperlyConfigured("DJANGO_ALLOWED_HOSTS must be set when DEBUG=0")
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -31,6 +41,7 @@ INSTALLED_APPS = [
     "api",
     "profiles.apps.ProfilesConfig",
     "social",
+    "groups",
 ]
 
 MIDDLEWARE = [
@@ -89,7 +100,9 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 AUTH_USER_MODEL = "users.User"
 
 # CORS (lock down in prod)
-CORS_ALLOWED_ORIGINS = [o.strip() for o in os.getenv("DJANGO_CORS_ALLOWED_ORIGINS", "").split(",") if o.strip()]
+CORS_ALLOWED_ORIGINS = [
+    o.strip() for o in get_env("DJANGO_CORS_ALLOWED_ORIGINS", "").split(",") if o.strip()
+]
 CORS_ALLOW_CREDENTIALS = True
 
 # DRF
@@ -113,8 +126,8 @@ REST_FRAMEWORK = {
     },
 }
 
-ACCESS_MIN = int(os.getenv("JWT_ACCESS_MINUTES", "15"))
-REFRESH_DAYS = int(os.getenv("JWT_REFRESH_DAYS", "7"))
+ACCESS_MIN = int(get_env("JWT_ACCESS_MINUTES", "15"))
+REFRESH_DAYS = int(get_env("JWT_REFRESH_DAYS", "7"))
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=ACCESS_MIN),

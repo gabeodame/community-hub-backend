@@ -16,6 +16,7 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 
 copy .env.example .env
+# Update .env with a strong DJANGO_SECRET_KEY value
 
 python manage.py migrate
 python manage.py runserver
@@ -48,6 +49,7 @@ python -m pytest -m e2e
 
 ## Notes
 - Uses a custom user model (`users.User`) from day one.
+- `.env` is required for local runs and must not be committed.
 - JWT endpoints are wired but optional for health check:
   - `POST /api/v1/auth/token/`
   - `POST /api/v1/auth/token/refresh/`
@@ -56,6 +58,12 @@ python -m pytest -m e2e
   - `GET/PATCH /api/v1/profiles/me/`
   - `POST/DELETE /api/v1/users/{id}/follow/`
   - `POST/DELETE /api/v1/users/{id}/block/`
+  - `POST /api/v1/groups/`
+  - `POST /api/v1/groups/{id}/join/`
+  - `GET /api/v1/groups/{id}/members/`
+  - `POST /api/v1/groups/{id}/members/{user_id}/approve/`
+  - Groups require auth; join policy controls `join/` behavior (open -> active, request -> pending, invite -> 403).
+  - Private group members list requires active membership; owners/moderators can approve members.
 
 ## Auth usage
 

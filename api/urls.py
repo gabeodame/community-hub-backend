@@ -1,6 +1,7 @@
 from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView
 from core.views import HealthView
+from groups.views import GroupApproveView, GroupCreateView, GroupJoinView, GroupMembersView
 from profiles.views import MeProfileView
 from social.views import BlockView, FollowView
 from users.views import LoginView, MeView, RegisterView
@@ -14,4 +15,12 @@ urlpatterns = [
     path("profiles/me/", MeProfileView.as_view(), name="profiles_me"),
     path("users/<int:user_id>/follow/", FollowView.as_view(), name="user_follow"),
     path("users/<int:user_id>/block/", BlockView.as_view(), name="user_block"),
+    path("groups/", GroupCreateView.as_view(), name="group_create"),
+    path("groups/<int:group_id>/join/", GroupJoinView.as_view(), name="group_join"),
+    path("groups/<int:group_id>/members/", GroupMembersView.as_view(), name="group_members"),
+    path(
+        "groups/<int:group_id>/members/<int:user_id>/approve/",
+        GroupApproveView.as_view(),
+        name="group_member_approve",
+    ),
 ]
