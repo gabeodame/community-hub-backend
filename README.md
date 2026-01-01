@@ -88,6 +88,77 @@ python -m pytest -m e2e
   - `GET /api/v1/notifications/?pagination=cursor` enables cursor pagination.
   - `GET /api/v1/notifications/unread-count/` returns `{ "unread": <count> }`.
 
+## Production configuration
+
+Required environment variables:
+- `DJANGO_SECRET_KEY`
+- `DJANGO_DEBUG` (set to `0` in production)
+- `DJANGO_ALLOWED_HOSTS`
+- `DJANGO_CORS_ALLOWED_ORIGINS`
+- `DJANGO_CSRF_TRUSTED_ORIGINS`
+
+Cookie + CSRF settings:
+- `JWT_COOKIE_SECURE` should be `1` in production (default when `DJANGO_DEBUG=0`)
+- `JWT_COOKIE_SAMESITE` defaults to `Lax`
+- `CSRF_COOKIE_SAMESITE` defaults to `Lax`
+
+Cross-site frontend (e.g., WordPress on another domain):
+- Set `JWT_COOKIE_SAMESITE=None` and `JWT_COOKIE_SECURE=1`
+- Add the frontend origin to `DJANGO_CORS_ALLOWED_ORIGINS` and `DJANGO_CSRF_TRUSTED_ORIGINS`
+
+## Infrastructure readiness
+
+Database:
+- Use Postgres in production (`DJANGO_DB_ENGINE=django.db.backends.postgresql`)
+- Set `DJANGO_DB_NAME`, `DJANGO_DB_USER`, `DJANGO_DB_PASSWORD`, `DJANGO_DB_HOST`, `DJANGO_DB_PORT`
+- Run migrations during deploy: `python manage.py migrate`
+
+Cache/throttling:
+- Set `REDIS_URL` for shared caching and throttling in production
+- Default is local memory cache (not suitable for multi-instance deployments)
+
+Static/media:
+- Configure `STATIC_ROOT`/`MEDIA_ROOT` for collection and uploads
+- For cloud storage, replace storage backends with S3/GCS equivalents
+
+Backups:
+- Schedule Postgres backups and verify restores regularly
+
+## Security hardening
+
+TLS + headers:
+- Enable HTTPS and `SECURE_SSL_REDIRECT=1` in production
+- Keep `SECURE_HSTS_*` enabled (default when `DJANGO_DEBUG=0`)
+- Use `SECURE_REFERRER_POLICY=same-origin`
+
+Edge rate limiting:
+- Use a WAF/CDN rate limit for auth endpoints and write-heavy routes
+- DRF throttling is in place, but edge limits are recommended
+
+CSRF + cookies:
+- For same-site apps, keep `JWT_COOKIE_SAMESITE=Lax`
+- For cross-site (WordPress on another domain), use `JWT_COOKIE_SAMESITE=None` and `JWT_COOKIE_SECURE=1`
+- Set `CSRF_COOKIE_HTTPONLY=0` so the browser can read and send `X-CSRFToken`
+
+## Observability & ops
+
+Logging:
+- Set `DJANGO_LOG_LEVEL=INFO` (or `DEBUG` during troubleshooting)
+- Logs are JSON-free by default; add a JSON formatter if your platform expects it
+
+Health + readiness:
+- `GET /api/v1/health/` for basic liveness
+- `GET /api/v1/ready/` checks database connectivity
+
+Release checklist:
+- Run `python manage.py migrate`
+- Verify `DJANGO_DEBUG=0`, `DJANGO_ALLOWED_HOSTS`, `DJANGO_CORS_ALLOWED_ORIGINS`, `DJANGO_CSRF_TRUSTED_ORIGINS`
+- Confirm HTTPS is enabled and `JWT_COOKIE_SECURE=1`
+
+## Production checklist
+
+- See `docs/PRODUCTION_CHECKLIST.md` for a deploy-ready checklist.
+
 ## Auth usage
 
 This API uses JWTs stored in HTTP-only cookies for web clients. Access tokens are read from cookies
@@ -173,4 +244,24 @@ async function logout() {
     headers: { "X-CSRFToken": csrfToken },
   });
 }
+```
+
+## Load testing
+
+Basic load test (health/posts/notifications):
+
+```bash
+BASE_URL=http://127.0.0.1:8000 REQUESTS=200 CONCURRENCY=4 python scripts/load_test.py
+```
+
+Throttle-aware pacing:
+
+```bash
+BASE_URL=http://127.0.0.1:8000 REQUESTS=120 CONCURRENCY=1 SLEEP_MS=1000 python scripts/load_test.py
+```
+
+Authenticated load test:
+
+```bash
+BASE_URL=http://127.0.0.1:8000 USERNAME=user PASSWORD=password python scripts/load_test.py
 ```

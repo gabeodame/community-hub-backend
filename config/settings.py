@@ -1,6 +1,7 @@
 from pathlib import Path
 import os
 from datetime import timedelta
+import logging
 from dotenv import load_dotenv
 from django.core.exceptions import ImproperlyConfigured
 
@@ -76,12 +77,28 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "config.wsgi.application"
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+DB_ENGINE = get_env("DJANGO_DB_ENGINE", "django.db.backends.sqlite3")
+DB_CONN_MAX_AGE = int(get_env("DJANGO_DB_CONN_MAX_AGE", "60"))
+
+if DB_ENGINE == "django.db.backends.sqlite3":
+    DATABASES = {
+        "default": {
+            "ENGINE": DB_ENGINE,
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": DB_ENGINE,
+            "NAME": get_env("DJANGO_DB_NAME", required=True),
+            "USER": get_env("DJANGO_DB_USER", required=True),
+            "PASSWORD": get_env("DJANGO_DB_PASSWORD", required=True),
+            "HOST": get_env("DJANGO_DB_HOST", required=True),
+            "PORT": get_env("DJANGO_DB_PORT", "5432"),
+            "CONN_MAX_AGE": DB_CONN_MAX_AGE,
+        }
+    }
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
@@ -96,6 +113,9 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+MEDIA_URL = "media/"
+MEDIA_ROOT = BASE_DIR / "media"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Custom user model
@@ -106,6 +126,26 @@ CORS_ALLOWED_ORIGINS = [
     o.strip() for o in get_env("DJANGO_CORS_ALLOWED_ORIGINS", "").split(",") if o.strip()
 ]
 CORS_ALLOW_CREDENTIALS = True
+CSRF_TRUSTED_ORIGINS = [
+    o.strip() for o in get_env("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if o.strip()
+]
+
+REDIS_URL = get_env("REDIS_URL", "")
+if REDIS_URL:
+    CACHES = {
+        "default": {
+            "BACKEND": "django_redis.cache.RedisCache",
+            "LOCATION": REDIS_URL,
+            "OPTIONS": {"CLIENT_CLASS": "django_redis.client.DefaultClient"},
+        }
+    }
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "default",
+        }
+    }
 
 # DRF
 REST_FRAMEWORK = {
@@ -145,15 +185,43 @@ JWT_COOKIE_SECURE = get_env("JWT_COOKIE_SECURE", "0") == "1" if DEBUG else True
 JWT_COOKIE_SAMESITE = get_env("JWT_COOKIE_SAMESITE", "Lax")
 JWT_COOKIE_PATH = "/"
 CSRF_COOKIE_SAMESITE = get_env("CSRF_COOKIE_SAMESITE", "Lax")
+CSRF_COOKIE_SECURE = JWT_COOKIE_SECURE
+SESSION_COOKIE_SECURE = JWT_COOKIE_SECURE
+SESSION_COOKIE_SAMESITE = JWT_COOKIE_SAMESITE
+CSRF_COOKIE_HTTPONLY = get_env("CSRF_COOKIE_HTTPONLY", "0") == "1"
 
 # Security defaults (adjust for prod)
 if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SECURE_SSL_REDIRECT = get_env("SECURE_SSL_REDIRECT", "1") == "1"
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
+    SECURE_REFERRER_POLICY = get_env("SECURE_REFERRER_POLICY", "same-origin")
+    SECURE_CROSS_ORIGIN_OPENER_POLICY = get_env(
+        "SECURE_CROSS_ORIGIN_OPENER_POLICY", "same-origin"
+    )
     SECURE_HSTS_SECONDS = 31536000
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
     SECURE_BROWSER_XSS_FILTER = True
     X_FRAME_OPTIONS = "DENY"
+
+LOG_LEVEL = get_env("DJANGO_LOG_LEVEL", "INFO")
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "simple": {
+            "format": "%(asctime)s %(levelname)s %(name)s %(message)s",
+        }
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "simple",
+        }
+    },
+    "root": {"handlers": ["console"], "level": LOG_LEVEL},
+}

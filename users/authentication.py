@@ -2,7 +2,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.middleware.csrf import CsrfViewMiddleware
 from rest_framework.authentication import BaseAuthentication
-from rest_framework.exceptions import AuthenticationFailed
+from rest_framework.exceptions import AuthenticationFailed, PermissionDenied
 from rest_framework.permissions import SAFE_METHODS
 from rest_framework_simplejwt.tokens import AccessToken
 
@@ -38,10 +38,11 @@ class CookieJWTAuthentication(BaseAuthentication):
         return (user, validated)
 
     def _enforce_csrf(self, request):
+        request._request._dont_enforce_csrf_checks = False
         middleware = CsrfViewMiddleware(lambda req: None)
         reason = middleware.process_view(request._request, None, (), {})
         if reason:
-            raise AuthenticationFailed(f"CSRF Failed: {reason}")
+            raise PermissionDenied(f"CSRF Failed: {reason}")
 
     def authenticate_header(self, request):
         return "Bearer"

@@ -1,6 +1,6 @@
 from django.urls import path
 from users.views import CsrfView, LoginView, LogoutView, MeView, RegisterView, TokenRefreshCookieView
-from core.views import HealthView
+from core.views import HealthView, ReadinessView
 from groups.views import GroupApproveView, GroupCreateView, GroupJoinView, GroupMembersView
 from posts.views import (
     CommentDetailView,
@@ -22,6 +22,7 @@ from social.views import BlockView, FollowView
 
 urlpatterns = [
     path("health/", HealthView.as_view(), name="health"),
+    path("ready/", ReadinessView.as_view(), name="ready"),
     path("auth/register/", RegisterView.as_view(), name="auth_register"),
     path("auth/token/", LoginView.as_view(), name="token_obtain_pair"),
     path("auth/token/refresh/", TokenRefreshCookieView.as_view(), name="token_refresh"),

@@ -86,6 +86,36 @@ def test_login_failure(api_client):
 
 
 @pytest.mark.django_db
+def test_refresh_requires_csrf(api_client):
+    User.objects.create_user(username="refreshuser", password="S3curePassw0rd!")
+    set_csrf_cookie(api_client)
+    api_client.post(
+        "/api/v1/auth/token/",
+        {"username": "refreshuser", "password": "S3curePassw0rd!"},
+        format="json",
+    )
+
+    api_client.credentials()
+    response = api_client.post("/api/v1/auth/token/refresh/", {}, format="json")
+    assert response.status_code == 403
+
+
+@pytest.mark.django_db
+def test_logout_requires_csrf(api_client):
+    User.objects.create_user(username="logoutuser", password="S3curePassw0rd!")
+    set_csrf_cookie(api_client)
+    api_client.post(
+        "/api/v1/auth/token/",
+        {"username": "logoutuser", "password": "S3curePassw0rd!"},
+        format="json",
+    )
+
+    api_client.credentials()
+    response = api_client.post("/api/v1/auth/logout/", {}, format="json")
+    assert response.status_code == 403
+
+
+@pytest.mark.django_db
 def test_me_requires_auth(api_client):
     response = api_client.get("/api/v1/users/me/")
 

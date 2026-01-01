@@ -39,6 +39,7 @@ def _clear_auth_cookies(resp):
  
 
 def _enforce_csrf(request):
+    request._request._dont_enforce_csrf_checks = False
     middleware = CsrfViewMiddleware(lambda req: None)
     reason = middleware.process_view(request._request, None, (), {})
     if reason:
