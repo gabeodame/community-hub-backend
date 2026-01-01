@@ -42,6 +42,8 @@ INSTALLED_APPS = [
     "profiles.apps.ProfilesConfig",
     "social",
     "groups",
+    "posts",
+    "notifications",
 ]
 
 MIDDLEWARE = [
@@ -108,7 +110,7 @@ CORS_ALLOW_CREDENTIALS = True
 # DRF
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "users.authentication.CookieJWTAuthentication",
     ),
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticatedOrReadOnly",
@@ -136,6 +138,13 @@ SIMPLE_JWT = {
     "BLACKLIST_AFTER_ROTATION": False,  # enable with token_blacklist app later
     "UPDATE_LAST_LOGIN": True,
 }
+
+JWT_ACCESS_COOKIE_NAME = get_env("JWT_ACCESS_COOKIE_NAME", "access")
+JWT_REFRESH_COOKIE_NAME = get_env("JWT_REFRESH_COOKIE_NAME", "refresh")
+JWT_COOKIE_SECURE = get_env("JWT_COOKIE_SECURE", "0") == "1" if DEBUG else True
+JWT_COOKIE_SAMESITE = get_env("JWT_COOKIE_SAMESITE", "Lax")
+JWT_COOKIE_PATH = "/"
+CSRF_COOKIE_SAMESITE = get_env("CSRF_COOKIE_SAMESITE", "Lax")
 
 # Security defaults (adjust for prod)
 if not DEBUG:

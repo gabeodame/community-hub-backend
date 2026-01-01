@@ -4,6 +4,8 @@ from rest_framework import generics, permissions, response, status, views
 
 from groups.models import Group, Membership
 from groups.serializers import GroupSerializer, MembershipSerializer
+from notifications.models import Notification
+from notifications.utils import create_notification
 
 User = get_user_model()
 
@@ -81,6 +83,14 @@ class GroupApproveView(views.APIView):
 
         member.status = Membership.Status.ACTIVE
         member.save(update_fields=["status"])
+        if member.user_id != request.user.id:
+            create_notification(
+                recipient=member.user,
+                actor=request.user,
+                verb=Notification.Verb.GROUP_APPROVED,
+                target=group,
+                data={"group_id": group.id, "group_name": group.name},
+            )
         return response.Response({"detail": "Approved."}, status=status.HTTP_200_OK)
 
 

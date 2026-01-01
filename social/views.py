@@ -3,6 +3,8 @@ from django.shortcuts import get_object_or_404
 from rest_framework import permissions, response, status, views
 
 from social.models import Block, Follow
+from notifications.models import Notification
+from notifications.utils import create_notification
 
 User = get_user_model()
 
@@ -31,6 +33,13 @@ class FollowView(views.APIView):
             )
 
         obj, created = Follow.objects.get_or_create(follower=request.user, following=target)
+        if created and target != request.user:
+            create_notification(
+                recipient=target,
+                actor=request.user,
+                verb=Notification.Verb.FOLLOWED,
+                target=request.user,
+            )
         return response.Response(
             {"detail": "Followed."},
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,

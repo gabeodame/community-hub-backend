@@ -1,12 +1,106 @@
-from rest_framework import generics, permissions, response, status
+from django.conf import settings
+from django.middleware.csrf import get_token
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.middleware.csrf import CsrfViewMiddleware
+from rest_framework import generics, permissions, response, status, views
+from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
 
 from users.serializers import RegisterSerializer, UserMeSerializer
 from users.throttles import LoginThrottle, RegisterThrottle, UserWriteThrottle
 
 
+def _set_auth_cookies(resp, access, refresh=None):
+    resp.set_cookie(
+        settings.JWT_ACCESS_COOKIE_NAME,
+        access,
+        max_age=int(settings.SIMPLE_JWT["ACCESS_TOKEN_LIFETIME"].total_seconds()),
+        httponly=True,
+        secure=settings.JWT_COOKIE_SECURE,
+        samesite=settings.JWT_COOKIE_SAMESITE,
+        path=settings.JWT_COOKIE_PATH,
+    )
+    if refresh:
+        resp.set_cookie(
+            settings.JWT_REFRESH_COOKIE_NAME,
+            refresh,
+            max_age=int(settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"].total_seconds()),
+            httponly=True,
+            secure=settings.JWT_COOKIE_SECURE,
+            samesite=settings.JWT_COOKIE_SAMESITE,
+            path=settings.JWT_COOKIE_PATH,
+        )
+
+
+def _clear_auth_cookies(resp):
+    resp.delete_cookie(settings.JWT_ACCESS_COOKIE_NAME, path=settings.JWT_COOKIE_PATH)
+    resp.delete_cookie(settings.JWT_REFRESH_COOKIE_NAME, path=settings.JWT_COOKIE_PATH)
+ 
+
+def _enforce_csrf(request):
+    middleware = CsrfViewMiddleware(lambda req: None)
+    reason = middleware.process_view(request._request, None, (), {})
+    if reason:
+        return response.Response(
+            {"detail": f"CSRF Failed: {reason}"},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+    return None
+
+
 class LoginView(TokenObtainPairView):
     throttle_classes = [LoginThrottle]
+
+    def post(self, request, *args, **kwargs):
+        csrf_response = _enforce_csrf(request)
+        if csrf_response:
+            return csrf_response
+        response_obj = super().post(request, *args, **kwargs)
+        access = response_obj.data.get("access")
+        refresh = response_obj.data.get("refresh")
+        if access and refresh:
+            _set_auth_cookies(response_obj, access, refresh)
+            get_token(request)
+            response_obj.data = {"detail": "Login successful."}
+        return response_obj
+
+
+class TokenRefreshCookieView(views.APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        csrf_response = _enforce_csrf(request)
+        if csrf_response:
+            return csrf_response
+        refresh = request.data.get("refresh") or request.COOKIES.get(
+            settings.JWT_REFRESH_COOKIE_NAME
+        )
+        serializer = TokenRefreshSerializer(data={"refresh": refresh})
+        serializer.is_valid(raise_exception=True)
+        access = serializer.validated_data.get("access")
+        new_refresh = serializer.validated_data.get("refresh")
+        resp = response.Response({"detail": "Token refreshed."}, status=status.HTTP_200_OK)
+        _set_auth_cookies(resp, access, new_refresh)
+        get_token(request)
+        return resp
+
+
+class LogoutView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        resp = response.Response({"detail": "Logged out."}, status=status.HTTP_200_OK)
+        _clear_auth_cookies(resp)
+        return resp
+
+
+@method_decorator(ensure_csrf_cookie, name="dispatch")
+class CsrfView(views.APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        return response.Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class RegisterView(generics.CreateAPIView):

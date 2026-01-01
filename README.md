@@ -53,6 +53,8 @@ python -m pytest -m e2e
 - JWT endpoints are wired but optional for health check:
   - `POST /api/v1/auth/token/`
   - `POST /api/v1/auth/token/refresh/`
+  - `POST /api/v1/auth/logout/`
+  - `GET /api/v1/auth/csrf/`
   - `POST /api/v1/auth/register/`
   - `GET/PATCH /api/v1/users/me/`
   - `GET/PATCH /api/v1/profiles/me/`
@@ -64,21 +66,111 @@ python -m pytest -m e2e
   - `POST /api/v1/groups/{id}/members/{user_id}/approve/`
   - Groups require auth; join policy controls `join/` behavior (open -> active, request -> pending, invite -> 403).
   - Private group members list requires active membership; owners/moderators can approve members.
+  - `GET /api/v1/posts/`
+  - `POST /api/v1/posts/`
+  - `GET /api/v1/posts/{id}/`
+  - `DELETE /api/v1/posts/{id}/`
+  - `GET /api/v1/users/{id}/posts/`
+  - `GET /api/v1/groups/{id}/posts/`
+  - `GET /api/v1/posts/{id}/comments/`
+  - `POST /api/v1/posts/{id}/comments/`
+  - `GET /api/v1/comments/{id}/`
+  - `DELETE /api/v1/comments/{id}/`
+  - `POST /api/v1/reports/`
+  - Group posts require active membership; private group feeds/comments are restricted to members.
+  - Deletes are soft deletes; reports accept `target_type` (post/comment) and `target_id`.
+  - Post feeds support `?pagination=cursor` and default page pagination (`page`, `page_size`).
+  - `GET /api/v1/notifications/`
+  - `PATCH /api/v1/notifications/{id}/read/`
+  - `POST /api/v1/notifications/read-all/`
+  - Notifications are stored in the DB and returned newest-first.
+  - `GET /api/v1/notifications/?unread=1` filters unread only; pagination uses `page` and `page_size`.
+  - `GET /api/v1/notifications/?pagination=cursor` enables cursor pagination.
+  - `GET /api/v1/notifications/unread-count/` returns `{ "unread": <count> }`.
 
 ## Auth usage
 
-This API uses JWT Bearer tokens (stateless). Access tokens are stored on the client and sent
-via the `Authorization` header. The server does not store access tokens in session state.
+This API uses JWTs stored in HTTP-only cookies for web clients. Access tokens are read from cookies
+and CSRF is required for unsafe methods (POST/PATCH/DELETE), including token refresh and logout.
 
 Example:
 
 ```powershell
-# Login to obtain tokens
+# Get CSRF cookie (use in browser fetch headers as X-CSRFToken)
+Invoke-RestMethod -Method Get -Uri http://127.0.0.1:8000/api/v1/auth/csrf/
+
+# Login sets HTTP-only access/refresh cookies (requires CSRF)
 Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/v1/auth/token/ `
   -Body (@{ username = "user"; password = "password" } | ConvertTo-Json) `
   -ContentType "application/json"
 
-# Call a protected endpoint
-Invoke-RestMethod -Method Get -Uri http://127.0.0.1:8000/api/v1/users/me/ `
-  -Headers @{ Authorization = "Bearer <access_token>" }
+# Call a protected endpoint (include cookies + CSRF header in browser clients)
+Invoke-RestMethod -Method Get -Uri http://127.0.0.1:8000/api/v1/users/me/
+```
+
+### Auth cookbook (browser)
+
+Notes:
+- Use `credentials: "include"` so cookies are sent.
+- Send `X-CSRFToken` for unsafe methods.
+- For local dev, `JWT_COOKIE_SECURE=0` keeps cookies on http; in production, cookies are secure by default.
+
+```js
+async function getCsrf() {
+  await fetch("http://127.0.0.1:8000/api/v1/auth/csrf/", {
+    method: "GET",
+    credentials: "include",
+  });
+}
+
+function readCookie(name) {
+  return document.cookie
+    .split("; ")
+    .find((row) => row.startsWith(`${name}=`))
+    ?.split("=")[1];
+}
+
+async function login(username, password) {
+  await getCsrf();
+  const csrfToken = readCookie("csrftoken");
+  const res = await fetch("http://127.0.0.1:8000/api/v1/auth/token/", {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      "X-CSRFToken": csrfToken,
+    },
+    body: JSON.stringify({ username, password }),
+  });
+  return res.json();
+}
+
+async function refreshToken() {
+  await getCsrf();
+  const csrfToken = readCookie("csrftoken");
+  const res = await fetch("http://127.0.0.1:8000/api/v1/auth/token/refresh/", {
+    method: "POST",
+    credentials: "include",
+    headers: { "X-CSRFToken": csrfToken },
+  });
+  return res.json();
+}
+
+async function getMe() {
+  const res = await fetch("http://127.0.0.1:8000/api/v1/users/me/", {
+    method: "GET",
+    credentials: "include",
+  });
+  return res.json();
+}
+
+async function logout() {
+  await getCsrf();
+  const csrfToken = readCookie("csrftoken");
+  await fetch("http://127.0.0.1:8000/api/v1/auth/logout/", {
+    method: "POST",
+    credentials: "include",
+    headers: { "X-CSRFToken": csrfToken },
+  });
+}
 ```

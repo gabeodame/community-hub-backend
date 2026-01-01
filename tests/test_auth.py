@@ -1,5 +1,8 @@
 import pytest
+from django.conf import settings
 from django.contrib.auth import get_user_model
+
+from tests.utils import authenticate_client, set_csrf_cookie
 
 User = get_user_model()
 
@@ -58,11 +61,13 @@ def test_login_success(api_client):
         "password": "S3curePassw0rd!",
     }
 
+    set_csrf_cookie(api_client)
     response = api_client.post("/api/v1/auth/token/", payload, format="json")
 
     assert response.status_code == 200
-    assert "access" in response.json()
-    assert "refresh" in response.json()
+    assert response.json()["detail"] == "Login successful."
+    assert settings.JWT_ACCESS_COOKIE_NAME in response.cookies
+    assert settings.JWT_REFRESH_COOKIE_NAME in response.cookies
 
 
 @pytest.mark.django_db
@@ -74,6 +79,7 @@ def test_login_failure(api_client):
         "password": "wrongpassword",
     }
 
+    set_csrf_cookie(api_client)
     response = api_client.post("/api/v1/auth/token/", payload, format="json")
 
     assert response.status_code == 401
@@ -89,15 +95,8 @@ def test_me_requires_auth(api_client):
 @pytest.mark.django_db
 def test_me_update_display_name(api_client):
     User.objects.create_user(username="meuser", password="S3curePassw0rd!")
-
-    login_response = api_client.post(
-        "/api/v1/auth/token/",
-        {"username": "meuser", "password": "S3curePassw0rd!"},
-        format="json",
-    )
-    token = login_response.json()["access"]
-
-    api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+    user = User.objects.get(username="meuser")
+    authenticate_client(api_client, user)
     response = api_client.patch("/api/v1/users/me/", {"display_name": "Updated"}, format="json")
 
     assert response.status_code == 200
